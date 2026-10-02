@@ -1,0 +1,35 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install pytest numpy scikit-learn pillow sqlalchemy pydantic pydantic-settings python-jose passlib redis
+      - run: pytest tests/unit -v
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: wasteos
+          POSTGRES_PASSWORD: wasteos
+          POSTGRES_DB: wasteos
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U wasteos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg2://wasteos:wasteos@localhost:5432/wasteos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install pytest fastapi httpx sqlalchemy psycopg2-binary pydantic pydantic-settings python-jose[cryptography] passlib[bcrypt] redis
+      - run: pytest tests/integration -v

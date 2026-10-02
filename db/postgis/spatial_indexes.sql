@@ -1,0 +1,11 @@
+-- Real spatial storage/indexes for hotspots, once you migrate the
+-- `hotspots` table from plain lat/lon columns (used in this scaffold for
+-- portability) to a proper geometry column:
+--
+-- ALTER TABLE hotspots ADD COLUMN geom geometry(Point, 4326);
+-- UPDATE hotspots SET geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326);
+-- CREATE INDEX idx_hotspots_geom ON hotspots USING GIST (geom);
+--
+-- Same pattern applies to waste.latitude/longitude and pickups.latitude/longitude
+-- if you need spatial (ST_DWithin / ST_Distance) queries instead of the
+-- pure-Python haversine used in packages/marketplace/matching.py.

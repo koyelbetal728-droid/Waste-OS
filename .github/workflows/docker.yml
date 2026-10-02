@@ -1,0 +1,17 @@
+name: docker
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.service }} image
+        run: |
+          if [ "${{ matrix.service }}" = "web" ]; then
+            docker build -f infra/docker/web.Dockerfile apps/web
+          else
+            docker build -f infra/docker/${{ matrix.service }}.Dockerfile .
+          fi

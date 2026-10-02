@@ -1,0 +1,7 @@
+# No real alert receiver (Slack/PagerDuty webhook) configured — this is a
+# structural placeholder. Add a `receivers:` webhook_configs entry before
+# relying on it.
+route:
+  receiver: "null-receiver"
+receivers:
+  - name: "null-receiver"

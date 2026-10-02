@@ -1,0 +1,24 @@
+name: model-validation
+on:
+  push:
+    paths:
+      - "packages/ml/**"
+      - "models/**"
+jobs:
+  validate-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Check registry.json is valid JSON (if present)
+        run: |
+          python3 -c "
+          import json, pathlib
+          p = pathlib.Path('models/registry/registry.json')
+          if p.exists():
+              json.loads(p.read_text())
+              print('registry.json is valid JSON')
+          else:
+              print('No registry.json yet — nothing to validate.')
+          "

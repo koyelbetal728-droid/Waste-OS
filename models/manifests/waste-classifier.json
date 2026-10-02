@@ -1,0 +1,8 @@
+{
+  "model_name": "waste-classifier",
+  "version": "dev-0",
+  "status": "mock",
+  "note": "No trained artifact yet. packages/ai/vision/classifier.py uses MockClassifier until train.py produces and registers a validated model.",
+  "dataset_version": null,
+  "metrics": null
+}

@@ -1,0 +1,8 @@
+name: deploy
+on:
+  workflow_dispatch: {}   # manual trigger only — no auto-deploy configured for this scaffold
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No deployment target configured yet. Wire this to your actual infrastructure (see infra/deployment/production.md) before enabling."

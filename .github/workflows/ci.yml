@@ -1,0 +1,5 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  all:
+    uses: ./.github/workflows/tests.yml

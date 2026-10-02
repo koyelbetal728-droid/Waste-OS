@@ -1,0 +1,14 @@
+# For running tests/linting locally outside Docker.
+pytest
+numpy
+scikit-learn
+pillow
+sqlalchemy
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+redis
+alembic
+psycopg2-binary
+ruff
