@@ -1,4 +1,4 @@
-.PHONY: up down test migrate seed
+.PHONY: up down test migrate seed train train-detect train-cnn evaluate
 
 up:
 	docker compose up --build
@@ -16,4 +16,13 @@ seed:
 	docker compose exec api python -m db.seeds.dev_accounts
 
 train:
-	docker compose exec api python -m scripts.train_models
+	python -m scripts.train_models
+
+train-detect:
+	python -m scripts.train_yolo_detect
+
+train-cnn:
+	python -m scripts.train_cnn_classifier
+
+evaluate:
+	python -m scripts.evaluate_models

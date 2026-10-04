@@ -1,12 +1,12 @@
-"""No dataset download is bundled — this environment has no network access
-to fetch TrashNet/TACO/etc. This script documents where to put data you
-download yourself so the rest of the pipeline (dataset.py/train.py) picks
-it up automatically:
+"""Kept for backwards compatibility. The real dataset fetcher is
+scripts/fetch_datasets.py, which downloads the YOLO detection set from Roboflow
+(or from any zip URL you pass it), verifies the split counts and class names,
+and stages it onto local disk so training is not throttled by OneDrive.
 
-    data/raw/waste/<category>/*.jpg   (e.g. data/raw/waste/plastic/*.jpg)
+    $env:ROBOFLOW_API_KEY="your-key"
+    python -m scripts.fetch_datasets --all
 
-One folder per class, matching the TrashNet/TACO layout. Once populated,
-run `python -m scripts.train_models`.
+Nothing under data/raw/ is committed, so a fresh clone must run this first.
 """
 
 if __name__ == "__main__":

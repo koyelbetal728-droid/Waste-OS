@@ -9,3 +9,10 @@ data/raw/*
 !data/raw/.gitkeep
 models/artifacts/*
 !models/artifacts/.gitkeep
+
+# Pretrained base weights (yolo11s.pt, etc.) are auto-downloaded by ultralytics
+# into the cwd. Don't commit them — fetch_datasets/train scripts re-download as
+# needed. Trained checkpoints live under models/artifacts/ and are deliberately
+# not in git either; share those as a GitHub Release asset or Git LFS if a
+# collaborator has to resume your run.
+*.pt

@@ -91,9 +91,26 @@ with the "no fake data" rule in the original spec.
   feature extraction (Pillow+numpy) → logistic regression (scikit-learn) →
   real sklearn evaluation (accuracy, macro-F1, per-class precision/recall,
   confusion matrix) → file-based model registry → inference. Train it with
-  `docker compose exec api python -m scripts.train_models` once you've
-  populated `data/raw/waste/<category>/*.jpg`. Until you do, the API keeps
-  using `MockClassifier` — it never pretends to be trained.
+  `python -m scripts.train_models` once the class folders are in place. The
+  bundled dump puts them at
+  `data/raw/waste/data/raw/waste/garbage_classification/<class>/*.jpg`
+  (12 classes); point somewhere else with `WASTE_CLASSIFICATION_DATA_ROOT`.
+  Note `standardized_256`/`standardized_384` are resized copies of `original`
+  — only one of the three is loaded, otherwise every photo counts three times.
+  Until a model is trained and promoted, the API keeps using `MockClassifier` —
+  it never pretends to be trained.
+- **Detection (YOLO)** — `scripts/fetch_datasets.py --detection` obtains the
+  Roboflow garbage-detection set (10,464 images, 7324 train / 2098 val /
+  1042 test; classes BIODEGRADABLE, CARDBOARD, GLASS, METAL, PAPER, PLASTIC).
+  Train with `python -m scripts.train_yolo_detect` (defaults yolo11s, imsz
+  640, batch 8, AMP — sized for a 4GB laptop GPU); weights land in
+  `models/artifacts/detect/<run>/weights/`.
+- `scripts/train_cnn_classifier.py` — ConvNeXt-Tiny transfer learning for the
+  12-class `garbage_classification` set, with inverse-frequency loss weights
+  and a weighted sampler so the 5325-image `clothes` class cannot swamp the
+  607-image `brown-glass` one. Exists because the histogram baseline caps out
+  near macro-F1 0.41: a 26-dim colour histogram cannot separate clear glass
+  from paper or shiny metal from everything else.
 - `forecasting/` — same real pattern: weekday/month features → linear
   regression → real MAE/RMSE on a chronological (non-shuffled) split.
 - `model_registry/` — genuine file-based registry (`models/registry/registry.json`):
@@ -110,10 +127,12 @@ with the "no fake data" rule in the original spec.
   rules + RAG + LLM together; `router.py` decides which components a
   request actually needs (a pure image scan never touches the LLM);
   `safety.py` sanitizes advisory text.
-- `vision/` — `detector.py`/`segmenter.py` are honest interfaces: no
-  trained detector/segmenter is bundled (that needs YOLO-class models this
-  environment can't produce), so they return clearly-labeled "unavailable"
-  results instead of fabricating bounding boxes or masks.
+- `vision/` — `detector.py`/`segmenter.py` are honest interfaces. No trained
+  weights are committed, so until you train one with
+  `scripts/train_yolo_detect.py` and point the loader at the resulting
+  `best.pt`, they return clearly-labeled "unavailable" results instead of
+  fabricating bounding boxes or masks. `segmenter.py` stays unavailable —
+  the raw set has bounding boxes only, no masks.
 - `multimodal/` — `image.py` (real), `text.py` (real, RAG+LLM), `video.py`
   (honestly reports "unsupported — no OpenCV/ffmpeg installed" rather than
   silently no-op'ing).
@@ -131,8 +150,64 @@ with the "no fake data" rule in the original spec.
 - `/api/v1/classification/model-status` — reports whether the active
   classifier is the mock or a trained/promoted model.
 
-`scripts/train_models.py`, `scripts/evaluate_models.py`,
-`scripts/download_datasets.py` orchestrate the above end-to-end.
+`scripts/fetch_datasets.py`, `scripts/train_models.py`, `scripts/train_yolo_detect.py`,
+`scripts/train_cnn_classifier.py`, `scripts/evaluate_models.py` orchestrate the
+above end-to-end.
+
+### Reproducing the ML training from a fresh clone
+
+Neither the datasets nor the trained weights are in git (`.gitignore`), so a
+fresh clone starts with code only. To get from zero to training:
+
+```bash
+# 1. Data. Needs a Roboflow API key, or pass --archive-url <zip of the dataset>.
+export ROBOFLOW_API_KEY="your-key"
+python -m scripts.fetch_datasets --all
+```
+
+`fetch_datasets.py` verifies the split counts (7324/2098/1042) and the six
+class names before handing back, then **stages the detection set to
+`%LOCALAPPDATA%/wasteos-ml/data`**. That staging step is not cosmetic: measured
+on an RTX 3050 laptop, reading the images from inside a OneDrive checkout gave
+0.80 MB/s versus 54 MB/s on local disk, and the GPU sat at 46W of a ~75W budget
+instead of loading up. Set `WASTE_ML_SCRATCH` to relocate, or `--no-stage` to
+keep it in the repo and accept the slower epochs.
+
+```bash
+# 2. Detector (YOLO11s, 640px, batch 8 — sized for a 4GB GPU).
+#    Windows: cap BLAS threads or the dataloader workers exhaust the system
+#    commit charge and die with "Unable to allocate 1.17 MiB".
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+python -m scripts.train_yolo_detect --workers 4
+
+# 3. Classifier.
+python -m packages.ml.classification.train     # histogram + logistic regression
+python -m scripts.train_cnn_classifier          # ConvNeXt-Tiny transfer learning
+```
+
+**Resuming an interrupted run** — checkpoints are written to
+`models/artifacts/detect/<run>/weights/{best,last}.pt` after every epoch:
+
+```bash
+# true continuation: restores optimizer, epoch and LR-schedule position
+python -m scripts.train_yolo_detect --resume-full models/artifacts/detect/<run>/weights/last.pt
+
+# weight-only restart: new optimizer and LR schedule, useful for changing
+# hyperparameters or repointing at a different dataset copy
+python -m scripts.train_yolo_detect --resume models/artifacts/detect/<run>/weights/last.pt --epochs 150
+```
+
+Because `models/artifacts/` is gitignored, a collaborator cannot pick up your
+run from the repo alone. Publish the checkpoint as a Release asset (54MB, well
+under GitHub's limits) or via Git LFS:
+
+```bash
+gh release create detect-v1 models/artifacts/detect/<run>/weights/best.pt
+```
+
+`packages/ml/model_registry/registry.json` stores artifact paths relative to
+the repo root, so it stays valid across clones; each entry carries an
+`artifact_in_git: false` flag because the weights themselves are not committed.
 Every page that previously showed "not wired to live data yet" now calls a
 real, DB-backed endpoint. New backend added:
 

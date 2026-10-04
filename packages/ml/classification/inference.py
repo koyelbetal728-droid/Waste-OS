@@ -16,8 +16,8 @@ class RegistryClassifier:
         if entry is None:
             raise RuntimeError(
                 "No production waste-classifier registered yet. Run "
-                "`python -m packages.ml.classification.train` with images under "
-                "data/raw/waste/<category>/, then promote the resulting version."
+                "`python -m packages.ml.classification.train` with one folder of "
+                "images per class under data/raw/, then promote the resulting version."
             )
         with open(entry["artifact_path"], "rb") as f:
             payload = pickle.load(f)

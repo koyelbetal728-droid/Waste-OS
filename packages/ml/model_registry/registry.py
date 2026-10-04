@@ -1,12 +1,35 @@
 """File-based model registry (real, working — no external MLOps dependency
 required). Backed by models/registry/registry.json. Promote/rollback update
-the same file so `get_production_model` always reflects the current state."""
+the same file so `get_production_model` always reflects the current state.
+
+Artifact paths are stored relative to the repo root so the registry stays
+portable: an absolute path like C:\\Users\\someone\\... means nothing to anyone
+who clones the repo, and a committed entry would advertise a model whose
+weights are gitignored and therefore absent. Relative paths are resolved back
+to absolute on read."""
 import json
 import os
 from datetime import datetime
 from pathlib import Path
 
 REGISTRY_PATH = Path(__file__).resolve().parents[3] / "models" / "registry" / "registry.json"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _portable_path(artifact_path: str) -> str:
+    """Store repo-relative when the artifact lives in this repo."""
+    try:
+        return str(Path(artifact_path).resolve().relative_to(REPO_ROOT)).replace("\\", "/")
+    except (ValueError, OSError):
+        return artifact_path
+
+
+def _resolve_artifact(artifact_path: str) -> str:
+    """Turn a stored repo-relative path back into a usable absolute path."""
+    candidate = Path(artifact_path)
+    if candidate.is_absolute():
+        return str(candidate)
+    return str(REPO_ROOT / candidate)
 
 
 def _load() -> dict:
@@ -26,11 +49,11 @@ def register_model(name: str, version: str, artifact_path: str, metrics: dict, d
     data = _load()
     entry = {
         "version": version,
-        "artifact_path": artifact_path,
+        "artifact_path": _portable_path(artifact_path),
         "metrics": metrics,
         "dataset_version": dataset_version,
         "status": "staging",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now().isoformat(),
     }
     data.setdefault(name, {"versions": [], "production_version": None})
     data[name]["versions"].append(entry)
@@ -74,7 +97,9 @@ def get_production_model(name: str) -> dict | None:
         return None
     for v in entry["versions"]:
         if v["version"] == entry["production_version"]:
-            return v
+            resolved = dict(v)
+            resolved["artifact_path"] = _resolve_artifact(v["artifact_path"])
+            return resolved
     return None
 
 
