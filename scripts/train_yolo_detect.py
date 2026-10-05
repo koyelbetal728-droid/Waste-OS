@@ -134,14 +134,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_data_yaml(explicit: str) -> Path:
-    if explicit:
-        return Path(explicit)
-    if LOCAL_DATA_YAML.exists():
-        return LOCAL_DATA_YAML
-    return DATA_YAML
-
-
 def find_latest_checkpoint() -> Path | None:
     """Newest committed checkpoint under models/artifacts/detect/*/weights."""
     candidates = sorted(
