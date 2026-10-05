@@ -205,13 +205,23 @@ def main() -> None:
         ckpt = Path(target)
         if not ckpt.is_file():
             raise SystemExit(f"Checkpoint not found: {ckpt}")
+
+        data_yaml = resolve_data_yaml(args.data_yaml)
+        if not data_yaml.is_file():
+            raise SystemExit(
+                f"No dataset config found (looked for {data_yaml}).\n"
+                "Resume still needs the data. Run:\n"
+                "  python -m scripts.fetch_datasets --detection"
+            )
+
         model = YOLO(ckpt)
-        print(f"Continuing {ckpt} in place (optimizer/epoch/LR schedule restored).")
-        print("Note: resume takes the dataset path from the checkpoint. If the data has")
-        print("moved since (e.g. re-staged to a different scratch dir), either edit the")
-        print("'data' entry in the run's args.yaml, or use --resume for a weight-only")
-        print("restart against --data-yaml.")
-        model.train(resume=True)
+        print(f"Continuing {ckpt} (optimizer/epoch/LR schedule restored).")
+        print(f"data: {data_yaml}")
+        print("A committed checkpoint records the absolute data path of whichever")
+        print("machine trained it. Ultralytics falls back to the data= value below")
+        print("when that path does not exist here, so a clone on any other machine")
+        print("resumes correctly against its own staged copy.")
+        model.train(data=str(data_yaml), resume=True)
         print(f"\nBest weights: {ckpt.parent / 'best.pt'}")
         return
 
