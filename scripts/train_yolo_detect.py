@@ -39,6 +39,7 @@ dataset nor the checkpoints are in git, so share last.pt separately (GitHub
 Release asset or Git LFS) if someone else has to continue your run.
 """
 import argparse
+import ctypes
 import hashlib
 import os
 import tempfile
@@ -104,7 +105,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--device", default="0")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument(
+        "--workers",
+        default="auto",
+        help="dataloader workers, or 'auto' to pick a count this machine's RAM "
+             "and Windows commit charge can sustain (recommended)",
+    )
     parser.add_argument("--patience", type=int, default=50)
     parser.add_argument("--close-mosaic", type=int, default=30)
     parser.add_argument("--cache", default="False", choices=["False", "ram", "disk"])
@@ -132,6 +138,94 @@ def parse_args() -> argparse.Namespace:
         help="verify this checkpoint against its .sha256 before resuming",
     )
     return parser.parse_args()
+
+
+def suggest_workers(requested: str) -> int:
+    """Pick a dataloader worker count that this machine can actually sustain.
+
+    Getting this wrong is not a soft failure. Each worker is a separate Python
+    process with its own copy of torch, and on Windows the whole training job
+    shares one system-wide commit charge. Overcommit it and training dies with
+
+        _ArrayMemoryError: Unable to allocate 1.17 MiB for an array with
+        shape (640, 640, 3)
+
+    or, more confusingly, "CUDA out of memory with batch=8. Reducing to
+    batch=4" — which blames the GPU for a host RAM shortage.
+
+    Measured reference point: 16GB total with ~1.4GB free and ~5.8GB of commit
+    headroom sustained 4 workers at batch 8 / 640px. 6 and 8 both failed.
+    So budget 1.5GB of headroom per worker and stay conservative — this
+    errs towards a slightly slower epoch rather than a crash that costs a run.
+    """
+    if requested != "auto":
+        return int(requested)
+
+    free_gb = commit_headroom_gb = None
+    if os.name == "nt":
+        free_gb, commit_headroom_gb = _windows_memory_gb()
+    else:
+        free_gb = _posix_available_gb()
+
+    ceiling = 8
+    if free_gb is not None:
+        ceiling = min(ceiling, max(1, int(free_gb // 0.6)))
+    if commit_headroom_gb is not None:
+        ceiling = min(ceiling, max(1, int(commit_headroom_gb // 1.5)))
+    workers = max(1, min(ceiling, (os.cpu_count() or 4) - 1))
+    facts = []
+    if free_gb is not None:
+        facts.append(f"free RAM {free_gb:.1f} GB")
+    if commit_headroom_gb is not None:
+        facts.append(f"commit headroom {commit_headroom_gb:.1f} GB")
+    facts.append(f"{os.cpu_count() or '?'} logical CPUs")
+    print(f"workers=auto -> {workers}  ({', '.join(facts)})")
+    if workers < 8:
+        print("              close browsers/IDEs and re-run to allow more workers")
+    return workers
+
+
+class _MEMORYSTATUSEX(ctypes.Structure):
+    _fields_ = [
+        ("dwLength", ctypes.c_ulong),
+        ("dwMemoryLoad", ctypes.c_ulong),
+        ("ullTotalPhys", ctypes.c_ulonglong),
+        ("ullAvailPhys", ctypes.c_ulonglong),
+        ("ullTotalPageFile", ctypes.c_ulonglong),
+        ("ullAvailPageFile", ctypes.c_ulonglong),
+        ("ullTotalVirtual", ctypes.c_ulonglong),
+        ("ullAvailVirtual", ctypes.c_ulonglong),
+        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+    ]
+
+
+def _windows_memory_gb() -> tuple[float | None, float | None]:
+    try:
+        stat = _MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            return None, None
+        free = stat.ullAvailPhys / 1024**3
+        # ullAvailPageFile is exactly the remaining commit charge: how much more
+        # this machine can back with RAM+pagefile before raising the Windows
+        # 1455 "couldn't open shared file mapping" / numpy allocation errors.
+        # Do not derive this from ullTotalVirtual/ullAvailVirtual — those are
+        # address space, not commit, and the difference is meaningless here.
+        commit_headroom = stat.ullAvailPageFile / 1024**3
+        return free, commit_headroom
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def _posix_available_gb() -> float | None:
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1024**2
+    except OSError:
+        return None
+    return None
 
 
 def find_latest_checkpoint() -> Path | None:
@@ -247,9 +341,11 @@ def main() -> None:
 
     model = YOLO(args.resume) if args.resume else YOLO(args.model)
 
+    workers = suggest_workers(args.workers)
+
     print(f"data:   {data_yaml}")
     print(f"model:  {args.model}  epochs={args.epochs}  imgsz={args.imgsz}  "
-          f"batch={args.batch}  workers={args.workers}  cache={args.cache}")
+          f"batch={args.batch}  workers={workers}  cache={args.cache}")
 
     model.train(
         data=str(data_yaml),
@@ -257,7 +353,7 @@ def main() -> None:
         imgsz=args.imgsz,
         batch=args.batch,
         device=args.device,
-        workers=args.workers,
+        workers=workers,
         amp=True,
         project=str(PROJECT_DIR),
         name=args.name,

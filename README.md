@@ -174,16 +174,53 @@ instead of loading up. Set `WASTE_ML_SCRATCH` to relocate, or `--no-stage` to
 keep it in the repo and accept the slower epochs.
 
 ```bash
-# 2. Detector (YOLO11s, 640px, batch 8 — sized for a 4GB GPU).
-#    Windows: cap BLAS threads or the dataloader workers exhaust the system
-#    commit charge and die with "Unable to allocate 1.17 MiB".
+# 2. Detector (YOLO11s, 640px — sized for a 4GB GPU).
+#    --workers defaults to "auto": it reads free RAM and, on Windows, remaining
+#    commit charge, then picks a count this machine can sustain.
+#    Windows: cap BLAS threads or the workers exhaust the commit charge and die
+#    with "Unable to allocate 1.17 MiB" (often misreported as CUDA OOM).
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
-python -m scripts.train_yolo_detect --workers 4
+python -m scripts.train_yolo_detect
 
 # 3. Classifier.
 python -m packages.ml.classification.train     # histogram + logistic regression
 python -m scripts.train_cnn_classifier          # ConvNeXt-Tiny transfer learning
 ```
+
+### Picking `--workers`, or just let it pick itself
+
+This is the setting most likely to kill a run, and it is entirely
+machine-dependent. Each worker is a separate process with its own torch, and on
+Windows the job shares one system-wide commit charge. Overcommit it and you get
+
+```
+_ArrayMemoryError: Unable to allocate 1.17 MiB for an array with shape (640, 640, 3)
+```
+
+or the more confusing `CUDA out of memory with batch=8. Reducing to batch=4`,
+which blames the GPU for what is really host RAM exhaustion. Measured on a
+16GB laptop with ~1.4GB free: 4 workers at batch 8 / 640px ran fine, 6 and 8
+both died.
+
+`--workers auto` (the default) reads free physical RAM and Windows
+`ullAvailPageFile`, budgets 1.5GB of commit headroom per worker, and prints
+what it decided:
+
+```
+workers=auto -> 4  (free RAM 3.5 GB, commit headroom 6.7 GB, 16 logical CPUs)
+```
+
+Closing browsers and IDEs and re-running is usually what moves it from 4 to 8,
+worth roughly 220s -> 160s per epoch. Pass an integer to override.
+
+The detection dataset is not in git (it is ~200MB of images), so run
+`fetch_datasets` first. `fetch_datasets.py` verifies the split counts
+(7324/2098/1042) and the six class names before handing back, then **stages the
+set to `%LOCALAPPDATA%/wasteos-ml/data`**. That staging step is not cosmetic:
+measured on the same laptop, reading the images from inside a OneDrive checkout
+gave 0.80 MB/s versus 54 MB/s on local disk, and the GPU sat at 46W of a ~75W
+budget instead of loading up. Set `WASTE_ML_SCRATCH` to relocate, or
+`--no-stage` to keep it in the repo and accept the slower epochs.
 
 **Resuming an interrupted run** — the detector checkpoint is committed, so a
 fresh clone can continue rather than retraining from COCO weights:
@@ -223,9 +260,17 @@ checkout gave 0.80 MB/s versus 54 MB/s on local disk, and the GPU sat at 46W of
 a ~75W budget instead of loading up. Set `WASTE_ML_SCRATCH` to relocate, or
 `--no-stage` to keep it in the repo and accept the slower epochs.
 
-Note that `--resume-full` reuses the dataset path recorded in the checkpoint. If
-you re-staged the data to a different scratch directory, either update `data` in
-the run's `args.yaml` or use `--resume` with an explicit `--data-yaml`.
+Note that a committed checkpoint records the absolute data path of whichever
+machine trained it. Ultralytics substitutes the `data=` value when that path
+does not exist locally, so `--resume-full auto` works on a clone anywhere
+without editing anything. Verified by rewriting a checkpoint's data path to a
+nonexistent directory and resuming: it continued from epoch 46 against the
+newly staged copy.
+
+One behaviour to know: on resume, `--name` is ignored — the checkpoint's own
+name and save directory win, so a resumed run writes back into the run
+directory it came from. That is correct for resuming in place, but the run
+directory is modified.
 
 `packages/ml/model_registry/registry.json` stores artifact paths relative to
 the repo root, so it stays valid across clones; each entry carries an
