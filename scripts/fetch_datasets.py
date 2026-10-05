@@ -33,6 +33,7 @@ so the repo copy is usually fine for that one.
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import urllib.request
@@ -202,6 +203,50 @@ def verify_detection_quiet(root: Path) -> bool:
     )
 
 
+def kaggle_dataset_archive(ref: str, dest: Path) -> Path | None:
+    """Download a public Kaggle dataset archive. No credentials required for
+    public datasets, which is the point — collaborators should not need a key.
+
+    `ref` is `owner/dataset-slug` or a full URL. Uses the Kaggle CLI if it is
+    installed, otherwise the public dataset download endpoint directly.
+    """
+    slug = ref.rstrip("/").split("/")[-2:] if "://" in ref else ref.strip("/")
+    if len(slug) != 2 or not all(slug):
+        print(f"  Kaggle ref must look like 'owner/dataset-slug', got: {ref}")
+        return None
+    owner, name = slug
+    dest.mkdir(parents=True, exist_ok=True)
+    archive = dest / f"{name}.zip"
+
+    if shutil.which("kaggle"):
+        print(f"Downloading via kaggle CLI: {owner}/{name}")
+        proc = subprocess.run(
+            ["kaggle", "datasets", "download", "-d", f"{owner}/{name}",
+             "-o", str(archive), "--unzip"],
+            capture_output=True, text=True,
+        )
+        if proc.returncode == 0:
+            extracted = dest / name
+            if (extracted / "data.yaml").is_file():
+                shutil.make_archive(str(dest / name), "zip", str(extracted))
+                archive = dest / f"{name}.zip"
+                archive.unlink(missing_ok=True)
+                shutil.rmtree(extracted)
+                return archive
+            return extracted if extracted.is_dir() else archive
+        print(f"  kaggle CLI failed: {(proc.stderr or proc.stdout).strip()[:300]}")
+        print("  falling back to the public endpoint (needs no credentials)")
+
+    url = f"https://www.kaggle.com/api/v1/datasets/download/{owner}/{name}"
+    print(f"Downloading {url}")
+    try:
+        download(url, archive)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  failed: {exc}")
+        return None
+    return archive
+
+
 def fetch_detection(args, scratch: Path) -> Path | None:
     repo_copy = REPO_DETECTION_DIR
     if verify_detection_quiet(repo_copy):
@@ -216,10 +261,25 @@ def fetch_detection(args, scratch: Path) -> Path | None:
         return stage(repo_copy, scratch, args.stage)
 
     target = scratch / "waste-detect"
-    if args.archive_url:
+    if args.kaggle_dataset:
+        got = kaggle_dataset_archive(args.kaggle_dataset, scratch)
+        if got is None:
+            print("Kaggle download failed.")
+            return None
+        if got.is_dir():
+            target = got
+            _flatten_to_data_yaml(target)
+        else:
+            extract(got, target)
+    elif args.archive_url:
         archive = scratch / "detection.zip"
         download(args.archive_url, archive)
         extract(archive, target)
+    elif args.classification_dir:
+        print("A classification folder-per-class dataset has no bounding boxes, so it")
+        print("cannot be used for detection training. Use --kaggle-detection or")
+        print("--archive-url, or train the classifier with scripts/train_cnn_classifier.py.")
+        return None
     else:
         api_key = os.environ.get("ROBOFLOW_API_KEY", "").strip()
         if not api_key:
@@ -272,6 +332,11 @@ def fetch_classification(args, scratch: Path) -> Path | None:
         return repo_copy
 
     source = Path(args.classification_data) if args.classification_data else None
+    if source is None and args.kaggle_classification:
+        got = kaggle_dataset_archive(args.kaggle_classification, scratch)
+        if got is not None:
+            source = got if got.is_dir() else scratch / got.stem
+            _flatten_to_data_yaml(source) if (source / "data.yaml").is_file() else None
     if source is None and args.classification_url:
         archive = scratch / "classification.zip"
         download(args.classification_url, archive)
@@ -302,6 +367,17 @@ def main() -> None:
     parser.add_argument("--classification", action="store_true", help="check/locate the classification set")
     parser.add_argument("--all", action="store_true", help="both")
     parser.add_argument("--archive-url", default="", help="zip URL for the detection set")
+    parser.add_argument(
+        "--kaggle-detection",
+        default="",
+        help="Kaggle dataset ref for the detection set, e.g. owner/waste-garbage-detection. "
+             "Public datasets download without credentials.",
+    )
+    parser.add_argument(
+        "--kaggle-classification",
+        default="",
+        help="Kaggle dataset ref for the classification set, e.g. owner/waste-garbage-classification",
+    )
     parser.add_argument("--classification-url", default="", help="zip URL for the classification set")
     parser.add_argument("--classification-data", default="", help="local folder, one dir per class")
     parser.add_argument("--scratch", default="", help="local scratch dir (default: %%LOCALAPPDATA%%/wasteos-ml/data)")
