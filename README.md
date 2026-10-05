@@ -156,14 +156,34 @@ above end-to-end.
 
 ### Reproducing the ML training from a fresh clone
 
-Neither the datasets nor the trained weights are in git (`.gitignore`), so a
-fresh clone starts with code only. To get from zero to training:
+Neither the trained weights nor the datasets are in git, so a fresh clone
+starts with code plus one detector checkpoint. To get from zero to training:
 
 ```bash
 # 1. Data. Needs a Roboflow API key, or pass --archive-url <zip of the dataset>.
 export ROBOFLOW_API_KEY="your-key"
 python -m scripts.fetch_datasets --all
 ```
+
+**Getting at the dataset.** It is not in git (~200MB of images) and Roboflow
+will not serve it anonymously — requesting the export without a key returns a
+22KB HTML login page, not the archive. So one of these has to happen first:
+
+- **Share the Roboflow project.** In Roboflow, share
+  `material-identification/garbage-classification-3` with the other person's
+  email, then they generate their own key under Account → Settings → API Keys.
+  Cleanest option, keeps the download canonical.
+- **Share a zip.** `fetch_datasets.py --archive-url <url>` accepts a plain zip
+  hosted anywhere (Drive/Dropbox/HuggingFace raw URL). It copes with the usual
+  layout variations — files at the root, wrapped in one folder, or nested — and
+  verifies split counts and class names before accepting it. A failed
+  verification aborts rather than pointing training at a partial dataset.
+- **Or skip detection** and use `scripts/train_cnn_classifier.py`, which needs
+  only the folder-per-class classification images.
+
+A committed `last.pt` is only useful against these same images. Against a
+different garbage dataset it will score badly, and that is a data mismatch, not
+a bug.
 
 `fetch_datasets.py` verifies the split counts (7324/2098/1042) and the six
 class names before handing back, then **stages the detection set to

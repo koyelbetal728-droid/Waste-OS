@@ -93,18 +93,54 @@ def download(url: str, dest: Path, timeout: int = 1800) -> None:
         print()
 
 
+def _find_data_yaml(root: Path, max_depth: int = 3) -> Path | None:
+    """Locate data.yaml anywhere near the top of an extracted tree."""
+    if (root / "data.yaml").is_file():
+        return root / "data.yaml"
+    if max_depth <= 0:
+        return None
+    for child in sorted(p for p in root.iterdir() if p.is_dir()):
+        found = _find_data_yaml(child, max_depth - 1)
+        if found is not None:
+            return found
+    return None
+
+
+def _promote(target: Path, source: Path) -> None:
+    """Move everything in `source` up into `target`, then drop `source`."""
+    for item in list(source.iterdir()):
+        destination = target / item.name
+        if destination.exists():
+            if destination.is_dir():
+                shutil.rmtree(destination)
+            else:
+                destination.unlink()
+        shutil.move(str(item), str(destination))
+    shutil.rmtree(source)
+
+
+def _flatten_to_data_yaml(target: Path) -> None:
+    """Make `target/data.yaml` valid regardless of how the archive was packed.
+
+    Zip layouts vary: files at the root, everything under one named folder, or a
+    folder per split with no top-level data.yaml at all. Walk down until
+    data.yaml appears, then promote that directory's contents to the target.
+    """
+    for _ in range(4):
+        if (target / "data.yaml").is_file():
+            return
+        found = _find_data_yaml(target)
+        if found is None:
+            return
+        _promote(target, found.parent)
+
+
 def extract(archive: Path, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     print(f"Extracting {archive.name} -> {target}")
     with zipfile.ZipFile(archive) as zf:
         zf.extractall(target)
-
-    entries = [p for p in target.iterdir()]
-    if len(entries) == 1 and entries[0].is_dir() and not (entries[0] / "data.yaml").exists():
-        nested = entries[0]
-        for item in nested.iterdir():
-            shutil.move(str(item), str(target / item.name))
-        nested.rmdir()
+    _flatten_to_data_yaml(target)
 
 
 def roboflow_export_url(api_key: str, fmt: str = "yolov11") -> str:
@@ -171,7 +207,12 @@ def fetch_detection(args, scratch: Path) -> Path | None:
     if verify_detection_quiet(repo_copy):
         print("Detection dataset already present in the repo:")
         print(f"  {repo_copy}")
-        verify_detection(repo_copy)
+        if not verify_detection(repo_copy):
+            print("  FAIL: the copy in the repo does not match the expected splits.")
+            print("  Expected 7324 train / 2098 valid / 1042 test and 6 class names.")
+            print("  Re-fetch into a scratch dir and train from there:")
+            print("    python -m scripts.fetch_datasets --detection --archive-url <zip-url>")
+            return None
         return stage(repo_copy, scratch, args.stage)
 
     target = scratch / "waste-detect"
@@ -207,7 +248,10 @@ def fetch_detection(args, scratch: Path) -> Path | None:
         extract(archive, target)
 
     print("Verifying downloaded detection dataset:")
-    verify_detection(target)
+    if not verify_detection(target):
+        print("Downloaded dataset failed verification. Refusing to point training at it,")
+        print("because a partial dataset silently trains a model against the wrong data.")
+        return None
     if args.stage:
         repo_copy.parent.mkdir(parents=True, exist_ok=True)
         if not repo_copy.exists():
@@ -296,11 +340,14 @@ def main() -> None:
     print("\n=== next steps ===")
     if detection_root:
         data_yaml = detection_root / "data.yaml"
-        print(f"Detect objects:")
-        print(f'  python -m scripts.train_yolo_detect --data-yaml "{data_yaml}" --workers 4')
-        print(f"Continue an interrupted run from its checkpoint:")
-        print(f'  python -m scripts.train_yolo_detect --data-yaml "{data_yaml}" '
-              f'--resume models/artifacts/detect/<run>/weights/last.pt --epochs 150 --workers 4')
+        print("Detect objects (--workers defaults to auto, sized to this machine):")
+        print(f'  python -m scripts.train_yolo_detect --data-yaml "{data_yaml}"')
+        print("Continue an interrupted run from its committed checkpoint:")
+        print(f'  python -m scripts.train_yolo_detect --data-yaml "{data_yaml}" --resume-full auto')
+    else:
+        print("Detection dataset unavailable — see the errors above. Without it there is")
+        print("nothing to train; the committed checkpoint is only useful against the same")
+        print("images. Either get a Roboflow API key, or share a zip with --archive-url.")
     print("Classify waste type:")
     print("  python -m packages.ml.classification.train")
     print("  python -m scripts.train_cnn_classifier")
