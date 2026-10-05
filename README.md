@@ -185,29 +185,51 @@ python -m packages.ml.classification.train     # histogram + logistic regression
 python -m scripts.train_cnn_classifier          # ConvNeXt-Tiny transfer learning
 ```
 
-**Resuming an interrupted run** — checkpoints are written to
-`models/artifacts/detect/<run>/weights/{best,last}.pt` after every epoch:
+**Resuming an interrupted run** — the detector checkpoint is committed, so a
+fresh clone can continue rather than retraining from COCO weights:
 
 ```bash
-# true continuation: restores optimizer, epoch and LR-schedule position
-python -m scripts.train_yolo_detect --resume-full models/artifacts/detect/<run>/weights/last.pt
+# what checkpoints exist, and the exact command for each
+python -m scripts.train_yolo_detect --list-runs
 
-# weight-only restart: new optimizer and LR schedule, useful for changing
-# hyperparameters or repointing at a different dataset copy
-python -m scripts.train_yolo_detect --resume models/artifacts/detect/<run>/weights/last.pt --epochs 150
+# true continuation: restores optimizer, epoch and LR-schedule position.
+# "auto" picks the most recent committed checkpoint.
+python -m scripts.train_yolo_detect --resume-full auto
+
+# verify the download against the committed SHA256 first (optional but cheap)
+python -m scripts.train_yolo_detect --checkpoint \
+    models/artifacts/detect/<run>/weights/last.pt --list-runs
 ```
 
-Because `models/artifacts/` is gitignored, a collaborator cannot pick up your
-run from the repo alone. Publish the checkpoint as a Release asset (54MB, well
-under GitHub's limits) or via Git LFS:
+`models/artifacts/detect/<run>/weights/last.pt` (57MB) is committed along with
+its `last.pt.sha256`. `best.pt` is byte-identical to `last.pt` at the end of a
+run so it is not committed twice, and all per-epoch plots and `results.csv`
+stays ignored.
+
+Two different meanings, pick deliberately:
 
 ```bash
-gh release create detect-v1 models/artifacts/detect/<run>/weights/best.pt
+--resume-full <ckpt>   resume in place; optimizer, epoch and LR schedule restored
+--resume <ckpt>        weights only; fresh optimizer and LR schedule, for changing
+                       hyperparameters or repointing at a different dataset copy
 ```
+
+The detection dataset is not in git (it is ~200MB of images), so run
+`fetch_datasets` first. `fetch_datasets.py` verifies the split counts
+(7324/2098/1042) and the six class names before handing back, then **stages the
+set to `%LOCALAPPDATA%/wasteos-ml/data`**. That staging step is not cosmetic:
+measured on an RTX 3050 laptop, reading the images from inside a OneDrive
+checkout gave 0.80 MB/s versus 54 MB/s on local disk, and the GPU sat at 46W of
+a ~75W budget instead of loading up. Set `WASTE_ML_SCRATCH` to relocate, or
+`--no-stage` to keep it in the repo and accept the slower epochs.
+
+Note that `--resume-full` reuses the dataset path recorded in the checkpoint. If
+you re-staged the data to a different scratch directory, either update `data` in
+the run's `args.yaml` or use `--resume` with an explicit `--data-yaml`.
 
 `packages/ml/model_registry/registry.json` stores artifact paths relative to
 the repo root, so it stays valid across clones; each entry carries an
-`artifact_in_git: false` flag because the weights themselves are not committed.
+`artifact_in_git: false` flag because the classifier weights are not committed.
 Every page that previously showed "not wired to live data yet" now calls a
 real, DB-backed endpoint. New backend added:
 

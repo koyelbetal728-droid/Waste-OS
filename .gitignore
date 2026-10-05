@@ -5,14 +5,27 @@ node_modules/
 .next/
 *.log
 .env
+
+# Pretrained base weights (yolo11s.pt, yolo11m.pt, ...) are auto-downloaded by
+# ultralytics into the cwd. Never commit them — the training scripts re-fetch
+# as needed. This rule must stay ABOVE the negations below, because git applies
+# the last matching pattern.
+*.pt
+
 data/raw/*
 !data/raw/.gitkeep
 models/artifacts/*
 !models/artifacts/.gitkeep
 
-# Pretrained base weights (yolo11s.pt, etc.) are auto-downloaded by ultralytics
-# into the cwd. Don't commit them — fetch_datasets/train scripts re-download as
-# needed. Trained checkpoints live under models/artifacts/ and are deliberately
-# not in git either; share those as a GitHub Release asset or Git LFS if a
-# collaborator has to resume your run.
-*.pt
+# Trained detector checkpoints ARE committed so a collaborator can continue a
+# run instead of retraining from COCO weights. Only last.pt (54MB — it carries
+# the optimizer state and epoch counter that --resume-full needs) plus its
+# SHA256. best.pt is byte-identical to last.pt at the end of a run, and the
+# per-epoch images/plots/results stay ignored.
+!models/artifacts/detect/
+models/artifacts/detect/*
+!models/artifacts/detect/*/
+!models/artifacts/detect/*/weights/
+models/artifacts/detect/*/weights/*
+!models/artifacts/detect/*/weights/last.pt
+!models/artifacts/detect/*/weights/last.pt.sha256

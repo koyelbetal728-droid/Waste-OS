@@ -39,8 +39,10 @@ dataset nor the checkpoints are in git, so share last.pt separately (GitHub
 Release asset or Git LFS) if someone else has to continue your run.
 """
 import argparse
+import hashlib
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from ultralytics import YOLO
@@ -116,7 +118,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--resume-full",
         default="",
-        help="true continuation: restore optimizer, epoch and LR schedule from last.pt",
+        help="true continuation: restore optimizer, epoch and LR schedule from a "
+             "checkpoint, or pass 'auto' to pick the most recent committed one",
+    )
+    parser.add_argument(
+        "--list-runs",
+        action="store_true",
+        help="list committed checkpoints and the exact --resume-full command for each",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default="",
+        help="verify this checkpoint against its .sha256 before resuming",
     )
     return parser.parse_args()
 
@@ -129,24 +142,77 @@ def resolve_data_yaml(explicit: str) -> Path:
     return DATA_YAML
 
 
+def find_latest_checkpoint() -> Path | None:
+    """Newest committed checkpoint under models/artifacts/detect/*/weights."""
+    candidates = sorted(
+        PROJECT_DIR.glob("*/weights/last.pt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def list_runs() -> None:
+    print(f"Detector runs under {PROJECT_DIR}:")
+    found = False
+    for ckpt in sorted(PROJECT_DIR.glob("*/weights/last.pt")):
+        age = datetime.fromtimestamp(ckpt.stat().st_mtime)
+        size_mb = ckpt.stat().st_size / 1e6
+        print(f"  {ckpt.parent.parent.name:<40} {size_mb:5.1f} MB  {age:%Y-%m-%d %H:%M}")
+        print(f"      continue with: --resume-full {ckpt}")
+        found = True
+    if not found:
+        print("  (none — train one first, or the checkpoint was not committed)")
+
+
 def main() -> None:
     args = parse_args()
+
+    if args.checkpoint:
+        ckpt = Path(args.checkpoint)
+        if not ckpt.is_file():
+            raise SystemExit(f"Checkpoint not found: {ckpt}")
+        actual = hashlib.sha256(ckpt.read_bytes()).hexdigest()
+        checksum_file = ckpt.with_suffix(ckpt.suffix + ".sha256")
+        if checksum_file.is_file():
+            expected = checksum_file.read_text(encoding="utf-8").split()[0].lower()
+            if actual != expected:
+                raise SystemExit(
+                    f"Checksum mismatch for {ckpt}\n  expected {expected}\n  got      {actual}"
+                )
+            print(f"checksum ok: {actual[:16]}...")
+        else:
+            print(f"no .sha256 next to {ckpt}, skipping verification")
+
+    if args.list_runs:
+        list_runs()
+        return
 
     if args.resume and args.resume_full:
         raise SystemExit("Use only one of --resume / --resume-full")
 
     if args.resume_full:
-        ckpt = Path(args.resume_full)
+        target = args.resume_full
+        if target.lower() == "auto":
+            found = find_latest_checkpoint()
+            if found is None:
+                raise SystemExit(
+                    f"No checkpoint found under {PROJECT_DIR}. Run --list-runs to see "
+                    "what is available, or pass an explicit path."
+                )
+            target = str(found)
+            print(f"Auto-selected most recent checkpoint: {target}")
+        ckpt = Path(target)
         if not ckpt.is_file():
             raise SystemExit(f"Checkpoint not found: {ckpt}")
         model = YOLO(ckpt)
         print(f"Continuing {ckpt} in place (optimizer/epoch/LR schedule restored).")
-        print("Note: resume takes the dataset path from the checkpoint. Re-staging the")
-        print("data elsewhere means editing the resume command that Ultralytics prints,")
-        print("or using --resume for a weight-only restart against a new data path.")
+        print("Note: resume takes the dataset path from the checkpoint. If the data has")
+        print("moved since (e.g. re-staged to a different scratch dir), either edit the")
+        print("'data' entry in the run's args.yaml, or use --resume for a weight-only")
+        print("restart against --data-yaml.")
         model.train(resume=True)
-        best = ckpt.parent / "best.pt"
-        print(f"\nBest weights: {best}")
+        print(f"\nBest weights: {ckpt.parent / 'best.pt'}")
         return
 
     data_yaml = resolve_data_yaml(args.data_yaml).resolve()
