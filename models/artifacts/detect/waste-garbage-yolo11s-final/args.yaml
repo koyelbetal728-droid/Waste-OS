@@ -1,6 +1,6 @@
 task: detect
 mode: train
-model: C:/Users/ABIR/AppData/Local/Temp/kilo/w8-checkpoint/last-epoch8.pt
+model: C:\Users\ABIR\OneDrive\Desktop\hacathon\wateros\Waste-OS\models\artifacts\detect\waste-garbage-yolo11s-final\weights\last.pt
 data: C:\Users\ABIR\AppData\Local\Temp\kilo\waste-detect\data.yaml
 epochs: 150
 time: null
@@ -24,7 +24,7 @@ single_cls: false
 rect: false
 cos_lr: true
 close_mosaic: 20
-resume: false
+resume: C:\Users\ABIR\OneDrive\Desktop\hacathon\wateros\Waste-OS\models\artifacts\detect\waste-garbage-yolo11s-final\weights\last.pt
 amp: true
 fraction: 1.0
 profile: false
@@ -77,7 +77,7 @@ momentum: 0.937
 weight_decay: 0.0005
 warmup_epochs: 3.0
 warmup_momentum: 0.8
-warmup_bias_lr: 0.1
+warmup_bias_lr: 0.0
 box: 7.5
 cls: 0.5
 cls_pw: 0.0

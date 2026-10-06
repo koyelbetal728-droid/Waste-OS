@@ -42,6 +42,7 @@ import argparse
 import ctypes
 import hashlib
 import os
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -136,6 +137,12 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         default="",
         help="verify this checkpoint against its .sha256 before resuming",
+    )
+    parser.add_argument(
+        "--supervise",
+        action="store_true",
+        help="run training in a subprocess and auto-restart on crash "
+        "(e.g. OneDrive file-lock on checkpoint save)",
     )
     return parser.parse_args()
 
@@ -251,8 +258,55 @@ def list_runs() -> None:
         print("  (none — train one first, or the checkpoint was not committed)")
 
 
+def supervise(argv: list[str], max_attempts: int = 20, min_runtime: float = 180.0) -> None:
+    """Run training in a subprocess, auto-restarting when it crashes.
+
+    Checkpoint saves inside a OneDrive-synced folder intermittently fail
+    with "OSError: [Errno 22] Invalid argument" when OneDrive holds the
+    ~57 MB last.pt open during sync. The failure happens at the end of an
+    epoch, so a crashed run still lasts several minutes — that is the
+    signal used to tell a recoverable save crash from a real startup
+    error: anything that lived longer than min_runtime seconds is retried,
+    anything that died sooner is surfaced as a genuine failure instead of
+    being masked by a restart loop.
+    """
+    import subprocess
+    import time
+
+    cmd = [sys.executable, "-m", "scripts.train_yolo_detect", *argv]
+    attempt = 0
+    while attempt < max_attempts:
+        print(f"[supervisor] attempt {attempt + 1}/{max_attempts}: {' '.join(cmd)}", flush=True)
+        start = time.monotonic()
+        proc = subprocess.run(cmd, cwd=str(REPO_ROOT))
+        elapsed = time.monotonic() - start
+        if proc.returncode == 0:
+            print("[supervisor] training completed successfully", flush=True)
+            return
+        if elapsed < min_runtime:
+            print(
+                f"[supervisor] failed after {elapsed:.0f}s (< {min_runtime:.0f}s) — "
+                "likely a real error, not retrying",
+                flush=True,
+            )
+            raise SystemExit(proc.returncode)
+        attempt += 1
+        print(
+            f"[supervisor] crashed after {elapsed:.0f}s "
+            f"(attempt {attempt}/{max_attempts}), restarting in 10s",
+            flush=True,
+        )
+        time.sleep(10)
+    print("[supervisor] gave up after max attempts", flush=True)
+    raise SystemExit(1)
+
+
 def main() -> None:
     args = parse_args()
+
+    if args.supervise:
+        supervise([a for a in sys.argv[1:] if a != "--supervise"])
+        return
 
     if args.checkpoint:
         ckpt = Path(args.checkpoint)
@@ -307,7 +361,13 @@ def main() -> None:
         print("machine trained it. Ultralytics falls back to the data= value below")
         print("when that path does not exist here, so a clone on any other machine")
         print("resumes correctly against its own staged copy.")
-        model.train(data=str(data_yaml), resume=True)
+        model.train(
+            data=str(data_yaml),
+            resume=True,
+            epochs=args.epochs,
+            cache=args.cache,
+            close_mosaic=args.close_mosaic,
+        )
         print(f"\nBest weights: {ckpt.parent / 'best.pt'}")
         return
 
