@@ -9,7 +9,7 @@ batch: 8
 imgsz: 640
 save: true
 save_period: -1
-cache: 'False'
+cache: ram
 device: '0'
 workers: 4
 project: C:\Users\ABIR\OneDrive\Desktop\hacathon\wateros\Waste-OS\models\artifacts\detect
@@ -23,7 +23,7 @@ deterministic: true
 single_cls: false
 rect: false
 cos_lr: true
-close_mosaic: 20
+close_mosaic: 57
 resume: C:\Users\ABIR\OneDrive\Desktop\hacathon\wateros\Waste-OS\models\artifacts\detect\waste-garbage-yolo11s-final\weights\last.pt
 amp: true
 fraction: 1.0

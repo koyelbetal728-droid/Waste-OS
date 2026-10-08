@@ -18,10 +18,11 @@ models/artifacts/*
 !models/artifacts/.gitkeep
 
 # Trained detector checkpoints ARE committed so a collaborator can continue a
-# run instead of retraining from COCO weights. Only last.pt (54MB — it carries
-# the optimizer state and epoch counter that --resume-full needs) plus its
-# SHA256. best.pt is byte-identical to last.pt at the end of a run, and the
-# per-epoch images/plots/results stay ignored.
+# run instead of retraining from COCO weights. Only last.pt plus its SHA256
+# are tracked. Mid-run, last.pt carries the optimizer state and epoch counter
+# that --resume-full needs; the final end-of-run save is stripped (no
+# optimizer, ~19MB, inference-ready). best.pt (the best-fitness epoch) stays
+# local, and the per-epoch images/plots/results stay ignored.
 !models/artifacts/detect/
 models/artifacts/detect/*
 !models/artifacts/detect/*/
