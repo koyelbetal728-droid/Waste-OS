@@ -21,10 +21,18 @@ const DEFAULT_HOTSPOTS = [
 export default function MunicipalityDashboard() {
   const [analytics, setAnalytics] = useState<any | null>(null);
   const [hotspots, setHotspots] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  function loadData() {
+    setRefreshing(true);
+    Promise.all([
+      fetchMunicipalityAnalytics().then(setAnalytics).catch(() => {}),
+      fetchHotspots().then(setHotspots).catch(() => {}),
+    ]).finally(() => setRefreshing(false));
+  }
 
   useEffect(() => {
-    fetchMunicipalityAnalytics().then(setAnalytics).catch(() => {});
-    fetchHotspots().then(setHotspots).catch(() => {});
+    loadData();
   }, []);
 
   const kpis = analytics
@@ -61,8 +69,12 @@ export default function MunicipalityDashboard() {
             >
               ← Main Hub
             </Link>
-            <button className="btn-gradient-eco text-white text-xs font-bold px-5 py-2.5 rounded-full shadow-md">
-              📡 Refresh Radar
+            <button
+              onClick={loadData}
+              disabled={refreshing}
+              className="btn-gradient-eco text-white text-xs font-bold px-5 py-2.5 rounded-full shadow-md disabled:opacity-60 transition-opacity"
+            >
+              {refreshing ? "Refreshing…" : "📡 Refresh Radar"}
             </button>
           </div>
         </div>

@@ -15,11 +15,11 @@ from packages.security.password import hash_password
 from packages.core.enums import UserRole
 
 DEV_ACCOUNTS = [
-    ("citizen@wasteos.local", "Citizen Dev Account", UserRole.citizen),
-    ("collector@wasteos.local", "Collector Dev Account", UserRole.collector),
-    ("recycler@wasteos.local", "Recycler Dev Account", UserRole.recycler),
-    ("municipality@wasteos.local", "Municipality Dev Account", UserRole.municipality),
-    ("admin@wasteos.local", "Admin Dev Account", UserRole.admin),
+    ("citizen@wasteos.org", "Citizen Dev Account", UserRole.citizen),
+    ("collector@wasteos.org", "Collector Dev Account", UserRole.collector),
+    ("recycler@wasteos.org", "Recycler Dev Account", UserRole.recycler),
+    ("municipality@wasteos.org", "Municipality Dev Account", UserRole.municipality),
+    ("admin@wasteos.org", "Admin Dev Account", UserRole.admin),
 ]
 
 if __name__ == "__main__":

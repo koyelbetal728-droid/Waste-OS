@@ -93,7 +93,16 @@ export default function MarketplacePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const displayListings = listings.length > 0 ? listings : SAMPLE_LISTINGS;
+  const baseListings = listings.length > 0 ? listings : SAMPLE_LISTINGS;
+  const displayListings = baseListings.filter((l) => {
+    if (activeCategory === "All") return true;
+    const text = `${l.material || ""} ${l.quality || ""} ${l.tag || ""}`.toLowerCase();
+    if (activeCategory === "Polymers") return text.includes("pet") || text.includes("hdpe") || text.includes("plastic") || text.includes("polymer");
+    if (activeCategory === "Metals") return text.includes("aluminium") || text.includes("aluminum") || text.includes("copper") || text.includes("metal") || text.includes("steel");
+    if (activeCategory === "Paper & Cardboard") return text.includes("cardboard") || text.includes("paper") || text.includes("occ");
+    if (activeCategory === "Organics") return text.includes("bio") || text.includes("digestate") || text.includes("organic") || text.includes("compost") || text.includes("food");
+    return true;
+  });
 
   return (
     <main className="min-h-screen bg-mesh-radial bg-slate-50 text-slate-800 px-4 sm:px-6 py-12">
