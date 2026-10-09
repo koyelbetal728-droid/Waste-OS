@@ -22,8 +22,19 @@ export default function RegisterPage() {
       const { access_token } = await login(form.email, form.password);
       saveToken(access_token);
       router.push(`/${form.role}`);
-    } catch {
-      setError("Registration failed — email may already be taken.");
+    } catch (e: any) {
+      // If registration failed because the email is already taken, the user
+      // may well already have an account — try signing in directly instead of
+      // blocking them with a generic "registration failed" message.
+      try {
+        const { access_token } = await login(form.email, form.password);
+        saveToken(access_token);
+        router.push(`/${form.role}`);
+        return;
+      } catch {
+        const msg = e?.message || "Registration failed — email may already be taken.";
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

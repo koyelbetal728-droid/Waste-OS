@@ -67,8 +67,17 @@ export async function register(email: string, password: string, full_name: strin
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, full_name, role }),
   });
-  if (!res.ok) throw new Error("Registration failed");
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message =
+      body?.error?.message || body?.message ||
+      (body?.detail ? JSON.stringify(body.detail) : "Registration failed");
+    const err: any = new Error(message);
+    err.status = res.status;
+    err.code = body?.error?.code;
+    throw err;
+  }
+  return body;
 }
 
 export async function getMe(token: string) {
