@@ -15,7 +15,10 @@ depends_on = None
 
 
 def upgrade():
-    op.execute('CREATE EXTENSION IF NOT EXISTS postgis')
+    if op.get_bind().execute(
+        sa.text("SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'")
+    ).fetchone():
+        op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
 
     op.create_table(
         "organizations",

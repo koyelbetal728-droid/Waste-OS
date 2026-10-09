@@ -1,8 +1,9 @@
 from pydantic import BaseModel
+from .common import UUIDStr
 
 
 class RewardEntryResponse(BaseModel):
-    id: str
+    id: UUIDStr
     points: int
     reason: str
 

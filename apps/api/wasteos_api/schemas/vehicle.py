@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class VehicleCreateRequest(BaseModel):
@@ -10,7 +11,7 @@ class VehicleCreateRequest(BaseModel):
 
 
 class VehicleResponse(BaseModel):
-    id: str
+    id: UUIDStr
     label: str
     capacity_kg: Optional[float]
     status: str

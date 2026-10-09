@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class ListingCreateRequest(BaseModel):
@@ -13,7 +14,7 @@ class ListingCreateRequest(BaseModel):
 
 
 class ListingResponse(BaseModel):
-    id: str
+    id: UUIDStr
     material: str
     quantity_kg: float
     quality: Optional[str]
@@ -26,12 +27,12 @@ class ListingResponse(BaseModel):
 
 
 class PurchaseRequest(BaseModel):
-    listing_id: str
+    listing_id: UUIDStr
 
 
 class TransactionResponse(BaseModel):
-    id: str
-    listing_id: str
+    id: UUIDStr
+    listing_id: UUIDStr
     final_price: float
 
     class Config:

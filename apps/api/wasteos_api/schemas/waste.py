@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class WasteCreateRequest(BaseModel):
@@ -10,7 +11,7 @@ class WasteCreateRequest(BaseModel):
 
 
 class WasteResponse(BaseModel):
-    id: str
+    id: UUIDStr
     category: Optional[str]
     material: Optional[str]
     lifecycle_stage: str

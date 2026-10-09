@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from .common import UUIDStr
 
 
 class PickupCreateRequest(BaseModel):
@@ -11,7 +12,7 @@ class PickupCreateRequest(BaseModel):
 
 
 class PickupResponse(BaseModel):
-    id: str
+    id: UUIDStr
     status: str
     latitude: Optional[float]
     longitude: Optional[float]

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from packages.core.enums import UserRole
+from .common import UUIDStr
 
 
 class RegisterRequest(BaseModel):
@@ -20,7 +21,7 @@ class TokenResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: UUIDStr
     email: str
     full_name: str
     role: str

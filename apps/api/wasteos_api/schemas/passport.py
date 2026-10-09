@@ -1,10 +1,11 @@
 from pydantic import BaseModel
 from typing import Any
+from .common import UUIDStr
 
 
 class PassportResponse(BaseModel):
-    id: str
-    waste_id: str
+    id: UUIDStr
+    waste_id: UUIDStr
     qr_token: str
     events: list[Any]
 

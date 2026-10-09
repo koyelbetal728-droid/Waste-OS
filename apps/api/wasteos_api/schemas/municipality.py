@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class ReportCreateRequest(BaseModel):
@@ -9,7 +10,7 @@ class ReportCreateRequest(BaseModel):
 
 
 class ReportResponse(BaseModel):
-    id: str
+    id: UUIDStr
     category: str
     status: str
 
@@ -18,7 +19,7 @@ class ReportResponse(BaseModel):
 
 
 class HotspotResponse(BaseModel):
-    id: str
+    id: UUIDStr
     latitude: float
     longitude: float
     severity: str

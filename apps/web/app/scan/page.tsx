@@ -1,7 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { uploadScan, getScanResult } from "@/lib/api";
+import { uploadScan, getScanResult, getToken, AuthError } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 type Stage = "idle" | "uploading" | "processing" | "completed" | "failed";
 
@@ -9,33 +10,53 @@ export default function ScanPage() {
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  // The scan API requires auth — send the token, or bounce to login.
+  useEffect(() => {
+    if (!getToken()) router.replace("/login");
+  }, [router]);
 
   async function handleFile(file: File) {
+    const token = getToken() ?? undefined;
+    if (!token) {
+      router.replace("/login");
+      return;
+    }
     setPreview(URL.createObjectURL(file));
     setStage("uploading");
     setResult(null);
+    setError(null);
     try {
-      const job = await uploadScan(file);
+      const job = await uploadScan(file, token);
       setStage("processing");
       // Poll for the real backend result.
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, 1000));
-        const res = await getScanResult(job.waste_id);
+        const res = await getScanResult(job.waste_id, token);
         if (res.status === "completed") {
           setResult(res);
           setStage("completed");
           return;
         }
         if (res.status === "failed") {
+          setError("The vision pipeline rejected this image. Try another photo.");
           setStage("failed");
           return;
         }
       }
+      setError("Scan timed out. Make sure the API is running.");
       setStage("failed");
-    } catch (e) {
-      setStage("failed");
-    }
+      } catch (e: any) {
+        if (e instanceof AuthError) {
+          router.replace("/login");
+          return;
+        }
+        setError(e?.message || "Scan failed. Make sure the API is running.");
+        setStage("failed");
+      }
   }
 
   return (
@@ -78,9 +99,10 @@ export default function ScanPage() {
           </motion.div>
         )}
         {stage === "failed" && (
-          <motion.p key="f" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 text-sm text-red-500">
-            Scan failed. Make sure the API and worker containers are running.
-          </motion.p>
+          <motion.div key="f" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-6 space-y-1">
+            <p className="text-sm text-red-500">Scan failed.</p>
+            <p className="text-xs text-gray-500">{error || "Make sure the API is running."}</p>
+          </motion.div>
         )}
         {stage === "completed" && result && (
           <motion.div

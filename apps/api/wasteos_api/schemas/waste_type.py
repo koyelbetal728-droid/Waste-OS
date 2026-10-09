@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from .common import UUIDStr
 
 
 class WasteTypeCreateRequest(BaseModel):
@@ -8,7 +9,7 @@ class WasteTypeCreateRequest(BaseModel):
 
 
 class WasteTypeResponse(BaseModel):
-    id: str
+    id: UUIDStr
     name: str
     category: str
     recyclable_default: bool

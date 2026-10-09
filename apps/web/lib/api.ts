@@ -1,5 +1,18 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+export class AuthError extends Error {
+  constructor(message = "Your session has expired. Please sign in again.") {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
+async function handleResponse(res: Response) {
+  if (res.status === 401) throw new AuthError();
+  if (!res.ok) throw new Error("Request failed");
+  return res;
+}
+
 export async function uploadScan(file: File, token?: string) {
   const form = new FormData();
   form.append("file", file);
@@ -8,7 +21,7 @@ export async function uploadScan(file: File, token?: string) {
     body: form,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
-  if (!res.ok) throw new Error("Scan upload failed");
+  await handleResponse(res);
   return res.json();
 }
 
@@ -16,7 +29,7 @@ export async function getScanResult(wasteId: string, token?: string) {
   const res = await fetch(`${API_URL}/scanning/${wasteId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
-  if (!res.ok) throw new Error("Failed to fetch scan result");
+  await handleResponse(res);
   return res.json();
 }
 

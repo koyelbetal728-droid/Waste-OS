@@ -16,6 +16,23 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
+def _broker_reachable() -> bool:
+    """Fast TCP check against the Celery broker. Celery's `.delay()` blocks
+    on connection retries when Redis is down, which would stall the upload
+    request — so check the socket first and fall back to inline inference."""
+    import socket
+    from urllib.parse import urlparse
+    from packages.core.config import settings
+    try:
+        parsed = urlparse(settings.redis_url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except Exception:
+        return False
+
+
 @router.post("", response_model=ScanJobResponse, status_code=202)
 async def create_scan(
     file: UploadFile = File(...),
@@ -41,14 +58,27 @@ async def create_scan(
     # Pass the storage path, not the raw bytes — both processes read the
     # same STORAGE_ROOT volume, so this survives worker restarts and keeps
     # the Celery message small.
-    try:
-        from wasteos_worker.tasks.waste.classify import classify_waste_image
-        classify_waste_image.delay(str(waste.id), image_path)
-    except Exception:
-        # Worker package not importable from this process context in some
-        # deployments (e.g. api-only container) — inference still runs via
-        # the worker service reading from the queue in production.
-        pass
+    if _broker_reachable():
+        try:
+            from wasteos_worker.tasks.waste.classify import classify_waste_image
+            classify_waste_image.delay(str(waste.id), image_path)
+        except Exception:
+            # Worker package not importable from this process context in some
+            # deployments (e.g. api-only container) — inference still runs via
+            # the worker service reading from the queue in production.
+            pass
+    else:
+        # No broker/worker reachable (local single-process deployment): run
+        # the same pipeline inline in a background thread so the scan still
+        # completes and the UI gets a real result instead of polling a
+        # record that stays "queued" forever.
+        import threading
+        from packages.ai.vision.pipeline import run_classification
+        threading.Thread(
+            target=run_classification,
+            args=(str(waste.id), image_path),
+            daemon=True,
+        ).start()
 
     return ScanJobResponse(job_id=str(waste.id), waste_id=str(waste.id), status=ScanStatus.queued.value)
 

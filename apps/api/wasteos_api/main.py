@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from packages.core.config import settings
 from packages.core.exceptions import WasteOSError
@@ -8,7 +8,11 @@ from wasteos_api.api.router import api_router
 from wasteos_api.middleware.request_id import RequestIDMiddleware
 from wasteos_api.middleware.security_headers import SecurityHeadersMiddleware
 from wasteos_api.middleware.rate_limit import RateLimitMiddleware
-from wasteos_api.middleware.error_handler import wasteos_exception_handler, unhandled_exception_handler
+from wasteos_api.middleware.error_handler import (
+    wasteos_exception_handler,
+    http_exception_handler,
+    unhandled_exception_handler,
+)
 
 app = FastAPI(title="WasteOS API", version="0.1.0")
 
@@ -24,6 +28,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 app.add_exception_handler(WasteOSError, wasteos_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 app.include_router(api_router, prefix="/api/v1")

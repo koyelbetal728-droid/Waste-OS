@@ -1,9 +1,10 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class AdminUserResponse(BaseModel):
-    id: str
+    id: UUIDStr
     email: str
     full_name: str
     role: str
@@ -24,7 +25,7 @@ class OrganizationCreateRequest(BaseModel):
 
 
 class OrganizationResponse(BaseModel):
-    id: str
+    id: UUIDStr
     name: str
     type: str
 

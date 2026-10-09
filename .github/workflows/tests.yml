@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: pip install pytest numpy scikit-learn pillow sqlalchemy pydantic pydantic-settings python-jose passlib redis
+      - run: pip install pytest numpy scikit-learn pillow sqlalchemy pydantic pydantic-settings python-jose redis
       - run: pytest tests/unit -v
 
   integration-tests:
@@ -31,5 +31,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: pip install pytest fastapi httpx sqlalchemy psycopg2-binary pydantic pydantic-settings python-jose[cryptography] passlib[bcrypt] redis
+      - run: pip install pytest fastapi httpx sqlalchemy psycopg2-binary pydantic pydantic-settings python-jose[cryptography] redis
       - run: pytest tests/integration -v

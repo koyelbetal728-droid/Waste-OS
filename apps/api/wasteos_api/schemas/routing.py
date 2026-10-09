@@ -1,8 +1,9 @@
 from pydantic import BaseModel
+from .common import UUIDStr
 
 
 class Stop(BaseModel):
-    id: str | None = None
+    id: UUIDStr | None = None
     latitude: float
     longitude: float
 

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class WardCreateRequest(BaseModel):
@@ -8,7 +9,7 @@ class WardCreateRequest(BaseModel):
 
 
 class WardResponse(BaseModel):
-    id: str
+    id: UUIDStr
     name: str
     population: Optional[str]
 

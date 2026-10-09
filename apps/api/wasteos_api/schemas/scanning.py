@@ -1,15 +1,16 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class ScanJobResponse(BaseModel):
-    job_id: str
-    waste_id: str
+    job_id: UUIDStr
+    waste_id: UUIDStr
     status: str
 
 
 class ScanResultResponse(BaseModel):
-    waste_id: str
+    waste_id: UUIDStr
     status: str
     category: Optional[str] = None
     material: Optional[str] = None

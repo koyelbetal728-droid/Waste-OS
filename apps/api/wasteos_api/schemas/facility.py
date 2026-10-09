@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
+from .common import UUIDStr
 
 
 class FacilityCreateRequest(BaseModel):
@@ -12,7 +13,7 @@ class FacilityCreateRequest(BaseModel):
 
 
 class FacilityResponse(BaseModel):
-    id: str
+    id: UUIDStr
     name: str
     type: str
     accepted_materials: Optional[str]

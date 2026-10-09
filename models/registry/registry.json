@@ -254,11 +254,26 @@
           "test_set_size": 3103
         },
         "dataset_version": null,
-        "status": "staging",
+        "status": "production",
         "created_at": "2026-10-04T21:27:48.304209",
         "artifact_in_git": false
       }
     ],
-    "production_version": null
+    "production_version": "v20261004212748"
+  },
+  "waste-detector": {
+    "versions": [
+      {
+        "version": "v1791562915",
+        "artifact_path": "models/artifacts/detect/waste-garbage-yolo11s-final/weights/last.pt",
+        "metrics": {
+          "mAP50": 0.54
+        },
+        "dataset_version": null,
+        "status": "production",
+        "created_at": "2026-10-09T21:51:55.276818"
+      }
+    ],
+    "production_version": "v1791562915"
   }
 }
