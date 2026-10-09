@@ -57,8 +57,15 @@ export async function login(email: string, password: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) throw new Error("Invalid email or password");
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = body?.error?.message || body?.detail || "Invalid email or password";
+    const err: any = new Error(typeof message === "string" ? message : "Invalid email or password");
+    err.status = res.status;
+    err.code = body?.error?.code;
+    throw err;
+  }
+  return body;
 }
 
 export async function register(email: string, password: string, full_name: string, role: string) {

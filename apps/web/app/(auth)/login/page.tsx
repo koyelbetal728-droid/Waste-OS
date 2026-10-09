@@ -20,8 +20,8 @@ export default function LoginPage() {
       const { access_token } = await login(email, password);
       saveToken(access_token);
       router.push("/citizen");
-    } catch {
-      setError("Invalid email or password.");
+    } catch (e: any) {
+      setError(e?.message || "Invalid email or password.");
     } finally {
       setLoading(false);
     }
